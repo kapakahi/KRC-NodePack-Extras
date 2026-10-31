@@ -10,9 +10,9 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras"
-Documentation = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras#readme"
-"Bug Tracker" = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras/issues"
+Repository = "https://github.com/kapakahi/KRC-NodePack-Extras"
+Documentation = "https://github.com/kapakahi/KRC-NodePack-Extras#readme"
+"Bug Tracker" = "https://github.com/kapakahi/KRC-NodePack-Extras/issues"
 
 [tool.comfy]
 PublisherId = "krc"
