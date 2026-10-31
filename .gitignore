@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.claude/
+
+# RemoteWorkflow API JSON files dropped in by users
+/data/remote_workflows/*.json

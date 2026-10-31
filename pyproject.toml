@@ -1,0 +1,19 @@
+[project]
+name = "KRC-NodePack-Extras"
+description = "Optional KRC nodes built on KRC NodePack: integrations with other custom-node packs (e.g. MiniMax H3 RefMods) and standalone utilities (e.g. the KRC Resizer and KRC Frame Router). Requires KRC NodePack."
+version = "0.1.0"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras"
+Documentation = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras#readme"
+"Bug Tracker" = "https://github.com/PLACEHOLDER/KRC-NodePack-Extras/issues"
+
+[tool.comfy]
+PublisherId = "krc"
+DisplayName = "KRC NodePack Extras"

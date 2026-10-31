@@ -1,0 +1,84 @@
+/* KRC RefMod Loadout: only the REFMODS header's token meter. The node itself (preset
+   panel, 8-slot stack, S / X / components / V / A strip, size) is KRC NodePack's
+   Loadout Kit; its root carries .krc-kit-refmod_loadout. */
+
+/* Right side of the header at a fixed width; the bar takes the slack. */
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-stack > .krc-panel-header > .krc-stack-header-controls {
+  flex: 0 1 200px;
+  min-width: 0;
+}
+
+/* A button (click = budget editor); hover reveals it like the strip pills. */
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-meter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 20px;
+  padding: 0 var(--krc-kit-strip-pad, 6px);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-meter:hover,
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-meter:focus-visible {
+  background: rgba(var(--krc-white-rgb), 0.06);
+  outline: none;
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--krc-white-rgb), 0.1);
+  overflow: hidden;
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--krc-accent-green);
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-meter.is-over .krc-rm-token-fill {
+  background: var(--krc-accent-red);
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-value {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--krc-text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Usage shares the fill's colour; the budget is gold ("off", dimmed, when unset). */
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-used {
+  color: var(--krc-accent-green);
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-sep {
+  opacity: 0.6;
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-budget {
+  color: var(--krc-accent-gold);
+}
+
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-budget.is-off {
+  opacity: 0.55;
+}
+
+/* Over budget: usage (fill + number) turns red; the budget stays gold. */
+.krc-lora-stacker.krc-kit-refmod_loadout .krc-rm-token-meter.is-over .krc-rm-token-used {
+  color: var(--krc-accent-red);
+}
