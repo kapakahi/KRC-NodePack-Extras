@@ -10,7 +10,7 @@ import { api as comfyApi } from "../../scripts/api.js";
 // why the node is disabled instead of failing with a module error. Mirrors REQUIRED_API
 // in utils/krc.py: same major, at least this minor.
 const API_FILE = "/krc_public_api.js";
-export const REQUIRED_API = { major: 2, minor: 0 };
+export const REQUIRED_API = { major: 2, minor: 9 };
 
 let apiCheck = null;
 let apiModule = null;

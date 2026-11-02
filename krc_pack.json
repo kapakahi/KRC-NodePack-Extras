@@ -2,6 +2,6 @@
   "id": "krc_extras",
   "name": "KRC NodePack Extras",
   "version": "1.0.1",
-  "requires_api": [2, 0],
+  "requires_api": [2, 9],
   "nodes": ["KRC RefMod Loadout", "KRC Resizer", "KRC Frame Router"]
 }

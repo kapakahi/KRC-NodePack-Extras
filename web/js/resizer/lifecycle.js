@@ -167,7 +167,7 @@ export function installResizerNode(nodeType) {
         const origOnConfigure = node.onConfigure;
         node.onConfigure = function (info) {
             if (Array.isArray(info?.size)) {
-                info.size = clampResizerSize(info.size, dom.root);
+                info.size = clampResizerSize(info.size, dom.root, node);
             }
             if (origOnConfigure) origOnConfigure.call(this, info);
             const hasSavedWidgets = Array.isArray(info?.widgets_values) && info.widgets_values.some(v => v !== "" && v != null);

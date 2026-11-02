@@ -1,5 +1,5 @@
-import { bindNodeShellSizeClamp } from "../krc.js";
-import { FIXED_DOM_H, FIXED_DOM_W, FIXED_NODE_H, FIXED_NODE_W, NODE2_CHROME_W, NODE2_CHROME_H, MAX_SIZE_FACTOR } from "./constants.js";
+import { bindNodeShellSizeClamp, classicNodeHeight } from "../krc.js";
+import { FIXED_DOM_H, FIXED_DOM_W, FIXED_NODE_W, NODE2_CHROME_W, NODE2_CHROME_H, MAX_SIZE_FACTOR } from "./constants.js";
 
 const MANAGED_WIDGET_NAMES = new Set([
     "crop_state",
@@ -43,23 +43,27 @@ export function hideManagedWidgets(node, domWidget) {
 
 // A detached DOM may not reveal its renderer until the next frame. Keep restored
 // sizes within the generous pending bounds, then clamp to the actual renderer.
-export function resizerSizeBounds(root) {
+// The classic canvas height comes from NodePack's shared edge under a node's UI
+// (classicNodeHeight, API 2.9): the frontend's own slot rows and widget margin, twice.
+export function resizerSizeBounds(root, node) {
     const shell = root.closest?.(".lg-node");
     const node2 = Boolean(shell);
-    const min = node2 ? [FIXED_DOM_W + NODE2_CHROME_W, FIXED_DOM_H + NODE2_CHROME_H] : [FIXED_NODE_W, FIXED_NODE_H];
+    const widget = node?.widgets?.find(entry => entry.element === root);
+    const min = node2 ? [FIXED_DOM_W + NODE2_CHROME_W, FIXED_DOM_H + NODE2_CHROME_H]
+        : [FIXED_NODE_W, classicNodeHeight(node, widget, FIXED_DOM_H)];
     const maxBase = !root.isConnected && !node2
         ? [FIXED_DOM_W + NODE2_CHROME_W, FIXED_DOM_H + NODE2_CHROME_H] : min;
     return { min, max: maxBase.map(value => value * MAX_SIZE_FACTOR), shell,
-        chrome: node2 ? [NODE2_CHROME_W, NODE2_CHROME_H] : [FIXED_NODE_W - FIXED_DOM_W, FIXED_NODE_H - FIXED_DOM_H] };
+        chrome: node2 ? [NODE2_CHROME_W, NODE2_CHROME_H] : [FIXED_NODE_W - FIXED_DOM_W, min[1] - FIXED_DOM_H] };
 }
 
-export function clampResizerSize(size, root) {
-    const { min, max } = resizerSizeBounds(root);
+export function clampResizerSize(size, root, node) {
+    const { min, max } = resizerSizeBounds(root, node);
     return min.map((value, index) => Math.min(max[index], Math.max(value, Number.isFinite(size?.[index]) ? size[index] : value)));
 }
 
 function stampSize(node, dom, size) {
-    const { min, max, chrome, shell } = resizerSizeBounds(dom.root);
+    const { min, max, chrome, shell } = resizerSizeBounds(dom.root, node);
     node.min_size = min;
     node.max_size = max;
     const values = {
@@ -78,7 +82,7 @@ function stampSize(node, dom, size) {
 
 export function createSizeEnforcer(node, dom) {
     return () => {
-        const size = clampResizerSize(node.size, dom.root);
+        const size = clampResizerSize(node.size, dom.root, node);
         stampSize(node, dom, size);
         if (node.size?.[0] !== size[0] || node.size?.[1] !== size[1]) node.setSize(size);
         node.size = size;
@@ -92,13 +96,13 @@ export function configureResizableDomWidget(domWidget, node, dom) {
     domWidget.options ||= {};
     domWidget.options.getMinHeight = () => FIXED_DOM_H;
     domWidget.options.getMaxHeight = () => {
-        const { max, chrome } = resizerSizeBounds(dom.root);
+        const { max, chrome } = resizerSizeBounds(dom.root, node);
         return max[1] - chrome[1];
     };
     const original = node.onResize;
     node.onResize = function(size) {
         const result = original?.apply(this, arguments);
-        const bounded = clampResizerSize(size, dom.root);
+        const bounded = clampResizerSize(size, dom.root, this);
         size[0] = bounded[0]; size[1] = bounded[1];
         this.size = bounded;
         stampSize(this, dom, bounded);

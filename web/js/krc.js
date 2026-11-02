@@ -15,6 +15,7 @@ export const {
   applyNodePalette,
   buildNodePaletteField,
   bindNodeShellSizeClamp,
+  classicNodeHeight,
   debounce,
   domSummary,
   ensureSharedStylesheets,

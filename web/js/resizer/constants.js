@@ -5,9 +5,8 @@ export const CONTROL_W = 270;
 export const FIXED_DOM_W = PREVIEW_SIZE + CONTROL_W + 10;
 export const FIXED_DOM_H = 430;
 export const NODE_FRAME_W = 21;
-export const NODE_FRAME_H = 93;  // Node 1.0 needs extra socket chrome for mask/audio I/O
 export const FIXED_NODE_W = FIXED_DOM_W + NODE_FRAME_W - 2;
-export const FIXED_NODE_H = FIXED_DOM_H + NODE_FRAME_H - 2;
+// The classic node height: NodePack's classicNodeHeight (node_shell.js resizerSizeBounds).
 export const MARGIN = 22;    // canvas margin around source frame (px)
 export const GRID = 16;      // quantisation grid (source px)
 export const MIN_SOURCE_OVERLAP = 1;   // minimum source/crop intersection (source px)
