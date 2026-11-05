@@ -1,6 +1,6 @@
 import { ensureSharedStylesheets, ensureStylesheet, installCanvasDragSelectionGuard } from "../krc.js";
 
-const STYLE_VERSION = "1.0.36-shared-1671";
+const STYLE_VERSION = "1.0.36-shared-1677";
 
 export function injectStyles() {
     installCanvasDragSelectionGuard();
