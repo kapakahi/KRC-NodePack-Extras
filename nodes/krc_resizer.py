@@ -1,6 +1,5 @@
 import base64
 import io
-import math
 from collections import OrderedDict
 
 import numpy as np
@@ -11,6 +10,17 @@ from aiohttp import web
 from PIL import Image
 
 from ..utils.resizer_mask import combine_masks, normalize_mask, select_mask_frames
+# crop_state's format and rules live in one place, shared with the external API provider.
+from ..utils.resizer_state import (
+    changed_input_frame_selection as _changed_input_frame_selection,
+    is_stale,
+    media_signature,
+    nearest_under_grid as _nearest_under_grid,
+    parse_color as _parse_color,
+    parse_crop_state,
+    parse_frame_select as _parse_frame_select,
+    stale_fallback,
+)
 from ..utils.resizer_transform import (
     apply_fine_rotation_chunked,
     apply_fine_rotation_mask_chunked,
@@ -24,28 +34,7 @@ _GRID = 16
 
 _MIN_DIM = 32           # smaller than this is not a real video frame
 _FINE_ROTATE_CHUNK = 8  # bound grid_sample memory for batch/video fine rotation
-_DEFAULT_FPS = 24
 
-
-def _nearest_under_grid(ideal_w, ideal_h, budget_px, g):
-    """Pick the grid-aligned (W, H) whose area is the greatest that does NOT
-    exceed ``budget_px``. Ceils AND floors each axis to ``g``, then among the
-    2x2 combos keeps those with area <= budget and returns the largest;
-    floor/floor is always <= budget, so a valid candidate always exists.
-    Mirrors nearestUnderGrid() in web/js/resizer/geometry.js — keep in sync."""
-    w_lo = max(g, int(math.floor(ideal_w / g)) * g)
-    w_hi = max(g, int(math.ceil(ideal_w / g)) * g)
-    h_lo = max(g, int(math.floor(ideal_h / g)) * g)
-    h_hi = max(g, int(math.ceil(ideal_h / g)) * g)
-    best = (w_lo, h_lo)          # floor/floor — always <= budget
-    best_area = w_lo * h_lo
-    for w in ((w_lo,) if w_hi == w_lo else (w_lo, w_hi)):
-        for h in ((h_lo,) if h_hi == h_lo else (h_lo, h_hi)):
-            area = w * h
-            if area <= budget_px and area > best_area:
-                best = (w, h)
-                best_area = area
-    return best
 
 # Module-level frame cache: str(node_id) -> {"width", "height", "frame_count",
 # "media_sig", "frames"}. Populated on each node execution; consumed by the JS
@@ -86,20 +75,6 @@ def _notify_preview_ready(unique_id):
         pass
 
 
-def _parse_color(s):
-    s = s.strip().lstrip("#")
-    if len(s) == 6 and all(c in "0123456789abcdefABCDEF" for c in s):
-        r, g, b = int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
-        return (r / 255.0, g / 255.0, b / 255.0)
-    parts = [p.strip() for p in s.split(",")]
-    if len(parts) != 3:
-        raise ValueError(f"[KRC Resizer] custom_pad_color must be hex or 3 comma-separated values, got: {s!r}")
-    vals = [float(p) for p in parts]
-    if any(v > 1.0 for v in vals):
-        vals = [v / 255.0 for v in vals]
-    return tuple(max(0.0, min(1.0, v)) for v in vals)
-
-
 def _tensor_to_jpeg(frame_tensor):
     """Convert a (H, W, 3) float32 0-1 tensor to JPEG bytes."""
     arr = (frame_tensor.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
@@ -110,62 +85,10 @@ def _tensor_to_jpeg(frame_tensor):
 
 
 def _media_signature(images):
-    """Cheap deterministic input fingerprint for first-run stale-state detection."""
+    """Cheap deterministic input fingerprint for first-run stale-state detection
+    (utils/resizer_state.media_signature, shared with the external API)."""
     n, h, w, _ = images.shape
-    frame_indices = [0] if n == 1 else [0, n - 1]
-    sig = (n * 1000003 + h * 1009 + w * 9176) & 0x7fffffff
-    for fi in frame_indices:
-        frame = images[fi]
-        ys = torch.linspace(0, h - 1, steps=min(5, h), device=images.device).round().long()
-        xs = torch.linspace(0, w - 1, steps=min(5, w), device=images.device).round().long()
-        sample = frame[ys][:, xs, :].detach().float().cpu().numpy()
-        vals = (sample.reshape(-1) * 255.0).round().astype(np.int64)
-        for v in vals:
-            sig = ((sig * 131) + int(v)) & 0x7fffffff
-    return int(sig)
-
-
-def _parse_frame_select(frame_select, frame_count):
-    """Return (mode, f_in, f_out) from the UI-managed frame_select widget.
-
-    Empty/legacy values are intentionally single-frame-safe. The frontend uses an
-    equal IN/OUT pair for Single Frame and a differing pair for Range.
-    """
-    max_f = max(0, frame_count - 1)
-    mode = "single"
-    f_in = f_out = 0
-
-    if frame_select == "last":
-        mode = "last"
-        f_in = f_out = max_f
-    elif frame_select:
-        try:
-            parts = [int(v) for v in frame_select.split(",")]
-            if len(parts) >= 2:
-                f_in, f_out = parts[0], parts[1]
-                mode = "single" if f_in == f_out else "range"
-        except ValueError:
-            pass
-
-    f_in = max(0, min(f_in, max_f))
-    f_out = max(0, min(f_out, max_f))
-    if f_out < f_in:
-        f_in, f_out = f_out, f_in
-    return mode, f_in, f_out
-
-
-def _changed_input_frame_selection(frame_mode, frame_count):
-    """Mirror the browser's new-input frame reset before it has refreshed.
-
-    The stale-crop fallback must reset geometry, not silently promote Single
-    Frame to a full video batch.
-    """
-    max_f = max(0, frame_count - 1)
-    if frame_mode == "last":
-        return max_f, max_f
-    if frame_mode == "range":
-        return 0, max_f
-    return 0, 0
+    return media_signature(n, h, w, lambda index: images[index])
 
 
 def _slice_audio_for_range(audio, frame_mode, f_in, frame_count, fps):
@@ -320,110 +243,37 @@ class KRCResizer:
         # 31 = manual resolution lock, 32 = explicit frame mode (frontend persistence only).
         # Crop coords are in EFFECTIVE (post-rotation)
         # source space, matching the transformed frames below.
-        crop_x = crop_y = crop_w = crop_h = 0
-        output_width = output_height = 0
-        no_select = False
-        res_mode_mp = False  # field 7: output sizing mode (1 = megapixels)
-        target_mp = 0.0      # field 8: megapixel target (stored *100)
-        divisor = _GRID  # output W/H must be a multiple of this (field 11, model-dependent)
-        rotate = 0
-        flip_x = flip_y = False
-        base_src_w = base_src_h = 0  # raw input dims the crop was computed against (fields 16/17)
-        padding_enabled = True
-        base_frame_count = 0
-        base_media_sig = 0
-        fine_rotate = 0
-        mask_mode = "both"
-        mask_invert = False
-        mask_feather = 0
-        mask_grow = 0
-        mask_threshold = 0.0
-        res_locked = False
-        audio_fps = _DEFAULT_FPS
-        if crop_state:
-            try:
-                parts = [int(v) for v in crop_state.split(",")]
-                if len(parts) >= 4:
-                    crop_x, crop_y, crop_w, crop_h = parts[:4]
-                if len(parts) >= 6:
-                    output_width, output_height = parts[4], parts[5]
-                if len(parts) >= 8:
-                    res_mode_mp = parts[7] != 0
-                if len(parts) >= 9:
-                    target_mp = parts[8] / 100.0
-                if len(parts) >= 10:
-                    no_select = parts[9] != 0
-                if len(parts) >= 11 and parts[10] > 0:
-                    divisor = parts[10]
-                if len(parts) >= 12 and parts[11] in (90, 180, 270):
-                    rotate = parts[11]
-                if len(parts) >= 13:
-                    flip_x = parts[12] != 0
-                if len(parts) >= 14:
-                    flip_y = parts[13] != 0
-                # Field 14 was the output target (removed 2026-10-26); still written as 0
-                # so the later fields keep their places, and ignored here.
-                if len(parts) >= 17:
-                    base_src_w, base_src_h = parts[15], parts[16]
-                if len(parts) >= 18:
-                    padding_enabled = parts[17] != 0
-                if len(parts) >= 19:
-                    base_frame_count = parts[18]
-                if len(parts) >= 20:
-                    base_media_sig = parts[19]
-                if len(parts) >= 23 and parts[22] > 0:
-                    audio_fps = max(1.0, min(99.0, parts[22] / 100.0))
-                if len(parts) >= 26:
-                    fine_rotate = max(-180, min(180, parts[25]))
-                if len(parts) >= 27:
-                    mask_mode = "input" if parts[26] == 1 else "empty" if parts[26] == 2 else "both"
-                if len(parts) >= 28:
-                    mask_invert = parts[27] != 0
-                if len(parts) >= 29:
-                    mask_feather = max(0, min(99, parts[28]))
-                if len(parts) >= 30:
-                    mask_grow = max(-99, min(99, parts[29]))
-                if len(parts) >= 31:
-                    mask_threshold = max(0.0, min(1.0, parts[30] / 1000.0))
-                if len(parts) >= 32:
-                    res_locked = parts[31] != 0
-            except ValueError:
-                pass
-        if res_locked:
-            res_mode_mp = False
-            divisor = 1
+        p = parse_crop_state(crop_state)
+        crop_x, crop_y, crop_w, crop_h = p["crop_x"], p["crop_y"], p["crop_w"], p["crop_h"]
+        output_width, output_height = p["output_width"], p["output_height"]
+        no_select = p["no_select"]
+        res_mode_mp = p["res_mode_mp"]          # field 7: output sizing mode (1 = megapixels)
+        target_mp = p["target_mp"]              # field 8: megapixel target (stored *100)
+        divisor = p["divisor"]                  # output W/H must be a multiple of this (field 10)
+        rotate = p["rotate"]
+        flip_x, flip_y = p["flip_x"], p["flip_y"]
+        padding_enabled = p["padding_enabled"]
+        fine_rotate = p["fine_rotate"]
+        mask_mode, mask_invert = p["mask_mode"], p["mask_invert"]
+        mask_feather, mask_grow, mask_threshold = p["mask_feather"], p["mask_grow"], p["mask_threshold"]
+        res_locked = p["res_locked"]            # forces manual output and divisor 1
+        audio_fps = p["audio_fps"]
 
         # Guarantee a full-frame pass when the crop was computed for a different
         # input. The canvas only learns a new input's identity AFTER a run, so the
         # first run on a changed input would otherwise apply stale crop/frame state.
         # Dims catch most changes; frame count and media_sig catch same-size swaps.
         # src_w/src_h here are still the raw input dims (transform happens below).
-        has_crop_identity = bool(base_src_w and base_src_h and base_frame_count and base_media_sig)
-        stale_crop = (
-            (bool(crop_state) and not has_crop_identity)
-            or (base_src_w and base_src_h and (base_src_w != src_w or base_src_h != src_h))
-            or (base_frame_count and base_frame_count != n)
-            or (base_media_sig and base_media_sig != media_sig)
-        )
-        if stale_crop:
+        if is_stale(crop_state, p, src_w, src_h, n, media_sig):
             print("[KRC Resizer] input changed; full-frame pass this run")
-            rotate = 0
-            fine_rotate = 0
-            f_in, f_out = _changed_input_frame_selection(frame_mode, n)
-            if res_locked and not no_select and not res_mode_mp and output_width >= _GRID and output_height >= _GRID:
-                ar = output_width / output_height
-                src_ar = src_w / src_h
-                if src_ar > ar:
-                    crop_h = max(_GRID, (src_h // _GRID) * _GRID)
-                    crop_w = max(_GRID, int((crop_h * ar) // _GRID) * _GRID)
-                else:
-                    crop_w = max(_GRID, (src_w // _GRID) * _GRID)
-                    crop_h = max(_GRID, int((crop_w / ar) // _GRID) * _GRID)
-                crop_x = round((src_w - crop_w) / (2 * _GRID)) * _GRID
-                crop_y = round((src_h - crop_h) / (2 * _GRID)) * _GRID
-                no_select = False
-            else:
-                no_select = True
+            fallback = stale_fallback(p, frame_mode, src_w, src_h, n)
+            rotate = fallback["rotate"]
+            fine_rotate = fallback["fineRotate"]
+            f_in, f_out = fallback["frames"]["in"], fallback["frames"]["out"]
+            no_select = fallback["noSelection"]
+            if fallback["crop"]:
+                crop = fallback["crop"]
+                crop_x, crop_y, crop_w, crop_h = crop["x"], crop["y"], crop["w"], crop["h"]
 
         frames = images[f_in:f_out + 1]
         n_sel  = frames.shape[0]
@@ -746,6 +596,32 @@ async def resizer_frame(request):
     cache = _frame_cache[node_id]
     idx = max(0, min(idx, cache["frame_count"] - 1))
     return web.Response(body=cache["frames"][idx], content_type="image/jpeg")
+
+
+# ── KRC NodePack's external API ─────────────────────────────────────────
+# KRC Resizer's previews and settings for outside apps (KRC LegitComfy), through NodePack's
+# /krc/ext/v1 routes: NodePack owns the routes, key and sources; utils/resizer_provider.py
+# the Resizer part. Registered once every pack has loaded (load order isn't fixed). An older
+# NodePack (before public API 2.10) has no providers: skipped, the node works the same.
+
+async def _register_ext_provider(_app=None):
+    try:
+        from ..utils.krc import api
+        register = getattr(api(), "register_ext_provider", None)
+    except Exception as err:  # noqa: BLE001 - NodePack missing: the node's own error covers it
+        print(f"[KRC Resizer] external API previews off: {err}")
+        return
+    if register is None:
+        print("[KRC Resizer] KRC NodePack is older than public API 2.10: no external API previews")
+        return
+    from ..utils.resizer_provider import PROVIDER
+    register("resizer", PROVIDER)
+
+
+try:
+    server.PromptServer.instance.app.on_startup.append(_register_ext_provider)
+except Exception:  # noqa: BLE001 - no server (static checks)
+    pass
 
 
 NODE_CLASS_MAPPINGS = {
