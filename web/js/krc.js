@@ -11,23 +11,9 @@ const api = (await nodePackApi()) || {};
 
 export const {
   KRC_API_VERSION,
-  applyNodeCanvasColors,
-  applyNodePalette,
-  buildNodePaletteField,
-  bindNodeShellSizeClamp,
-  classicNodeHeight,
-  debounce,
-  domSummary,
-  ensureSharedStylesheets,
   ensureStylesheet,
-  imageStatsFromElements,
-  installCanvasDragSelectionGuard,
-  installKrcStatsAggregator,
   makeNodeApi,
-  modalPaletteIdForNode,
-  openKrcModal,
   openNumericPopover,
   registerLoadout,
-  roughJsonBytes,
   stopCanvasEvents,
 } = api;

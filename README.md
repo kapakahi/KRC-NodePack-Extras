@@ -16,18 +16,12 @@ presets.
 - **Outputs** `mods` and `prompt_hint`, ready for Apply H3 RefMod and H3 RefMod Text
   Encode.
 
-## KRC Resizer
-
-<a href="https://raw.githubusercontent.com/kapakahi/KRC-NodePack-Extras/main/docs/images/resizer.webp"><img src="https://raw.githubusercontent.com/kapakahi/KRC-NodePack-Extras/main/docs/images/resizer.webp" width="560" alt="KRC Resizer"></a>
-
-Crop, pad, resize and mask images with a live preview. Handles image batches, and can
-pass through or switch itself off.
-
 ## KRC Frame Router
 
 Sends a single frame out `image` and a batch of frames out `video`. Made for MiniMax H3
 **Reference to Video**: wire `image` to its reference image and `video` to its reference
-video, and a still or a clip from the same Resizer lands in the right place.
+video, and a still or a clip from the same KRC Resizer (part of KRC NodePack) lands in the
+right place.
 
 ## Installation
 

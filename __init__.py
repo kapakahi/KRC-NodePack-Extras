@@ -3,7 +3,8 @@ KRC NodePack Extras
 ===================
 Optional KRC nodes that live outside KRC NodePack: nodes that depend on another
 custom-node pack (incubating until ComfyUI supports the technique natively, e.g. RefMod
-Loadout) and standalone utilities (e.g. Resizer, Frame Router).
+Loadout) and standalone utilities (e.g. Frame Router). KRC Resizer moved to KRC NodePack
+(2026-11-10).
 
 Requires KRC NodePack. Everything used from it goes through its public API
 (``krc_public_api``), found lazily at run time (never at import, so load order and
@@ -27,14 +28,6 @@ try:
     NODE_DISPLAY_NAME_MAPPINGS.update(_rm_d)
 except Exception as _rm_err:
     print(f"[KRC NodePack Extras] Warning: RefMod Loadout failed to load: {_rm_err}")
-
-# Resizer (image resizer / outpainter; standalone, only borrows KRC styling).
-try:
-    from .nodes.krc_resizer import NODE_CLASS_MAPPINGS as _rz_c, NODE_DISPLAY_NAME_MAPPINGS as _rz_d
-    NODE_CLASS_MAPPINGS.update(_rz_c)
-    NODE_DISPLAY_NAME_MAPPINGS.update(_rz_d)
-except Exception as _rz_err:
-    print(f"[KRC NodePack Extras] Warning: Resizer failed to load: {_rz_err}")
 
 # Frame Router (one frame -> image, a batch -> video; standalone, a V3 node).
 try:
